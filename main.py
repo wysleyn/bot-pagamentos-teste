@@ -2,16 +2,17 @@
 import requests
 import uuid
 import os
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import Flask, request
 from dotenv import load_dotenv
 
 load_dotenv()
 
 TOKEN_TELEGRAM = os.getenv("TOKEN_TELEGRAM")
 ACCESS_TOKEN_MP = os.getenv("ACCESS_TOKEN_MP")
+RENDER_URL = os.getenv("RENDER_URL")
 
 bot = telebot.TeleBot(TOKEN_TELEGRAM)
+app = Flask(__name__)
 
 PLANOS = {
     "1": {"valor": 5.90,  "desc": "Plano Bronze"},
@@ -20,18 +21,16 @@ PLANOS = {
     "4": {"valor": 20.00, "desc": "Plano VIP Diamond"}
 }
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot rodando!")
-    def log_message(self, format, *args):
-        pass
+@app.route("/")
+def home():
+    return "Bot rodando!", 200
 
-def rodar_servidor():
-    porta = int(os.environ.get("PORT", 8080))
-    servidor = HTTPServer(("0.0.0.0", porta), Handler)
-    servidor.serve_forever()
+@app.route(f"/{TOKEN_TELEGRAM}", methods=["POST"])
+def webhook():
+    json_str = request.get_data().decode("UTF-8")
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "ok", 200
 
 @bot.message_handler(commands=["start"])
 def enviar_menu(message):
@@ -72,15 +71,10 @@ def callback_pix(call):
             "email": f"user_{call.from_user.id}@pagamento.com"
         }
     }
-    
-    print(f">>> Tentando gerar PIX de R$ {plano['valor']}")
-    print(f">>> Token MP: {ACCESS_TOKEN_MP[:20] if ACCESS_TOKEN_MP else 'NAO ENCONTRADO'}")
-    
     try:
         res = requests.post(url, json=data, headers=headers)
-        print(f">>> Status HTTP: {res.status_code}")
-        print(f">>> Resposta completa: {res.text}")
         res_json = res.json()
+        print(f"Resposta MP: {res_json}")
         pix_copia_cola = res_json["point_of_interaction"]["transaction_data"]["qr_code"]
         texto_final = (
             f"✅ *PIX GERADO COM SUCESSO!*\n\n"
@@ -93,14 +87,13 @@ def callback_pix(call):
         )
         bot.send_message(call.message.chat.id, texto_final, parse_mode="Markdown")
     except Exception as e:
-        print(f">>> ERRO EXCEPTION: {e}")
-        print(f">>> Resposta raw: {res.text if res else 'sem resposta'}")
+        print(f"ERRO: {e}")
+        print(f"Resposta: {res.text}")
         bot.send_message(call.message.chat.id, "❌ Erro ao gerar PIX. Tente novamente.")
 
-print("✅ Bot iniciado!")
-print(f"Token Telegram: {TOKEN_TELEGRAM[:20] if TOKEN_TELEGRAM else 'NAO ENCONTRADO'}")
-print(f"Token MP: {ACCESS_TOKEN_MP[:20] if ACCESS_TOKEN_MP else 'NAO ENCONTRADO'}")
-thread = threading.Thread(target=rodar_servidor)
-thread.daemon = True
-thread.start()
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    bot.remove_webhook()
+    bot.set_webhook(url=f"{RENDER_URL}/{TOKEN_TELEGRAM}")
+    print(f"✅ Webhook configurado: {RENDER_URL}/{TOKEN_TELEGRAM}")
+    porta = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=porta)
