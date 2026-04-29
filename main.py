@@ -2,6 +2,8 @@
 import requests
 import uuid
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,6 +19,19 @@ PLANOS = {
     "3": {"valor": 14.90, "desc": "Plano Ouro"},
     "4": {"valor": 20.00, "desc": "Plano VIP Diamond"}
 }
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot rodando!")
+    def log_message(self, format, *args):
+        pass
+
+def rodar_servidor():
+    porta = int(os.environ.get("PORT", 8080))
+    servidor = HTTPServer(("0.0.0.0", porta), Handler)
+    servidor.serve_forever()
 
 @bot.message_handler(commands=["start"])
 def enviar_menu(message):
@@ -78,4 +93,7 @@ def callback_pix(call):
         bot.send_message(call.message.chat.id, "❌ Erro ao gerar PIX. Tente novamente.")
 
 print("✅ Bot iniciado!")
+thread = threading.Thread(target=rodar_servidor)
+thread.daemon = True
+thread.start()
 bot.polling(none_stop=True)
