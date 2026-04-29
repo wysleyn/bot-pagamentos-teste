@@ -72,10 +72,15 @@ def callback_pix(call):
             "email": f"user_{call.from_user.id}@pagamento.com"
         }
     }
+    
+    print(f">>> Tentando gerar PIX de R$ {plano['valor']}")
+    print(f">>> Token MP: {ACCESS_TOKEN_MP[:20] if ACCESS_TOKEN_MP else 'NAO ENCONTRADO'}")
+    
     try:
         res = requests.post(url, json=data, headers=headers)
+        print(f">>> Status HTTP: {res.status_code}")
+        print(f">>> Resposta completa: {res.text}")
         res_json = res.json()
-        print(f"Resposta MP: {res_json}")
         pix_copia_cola = res_json["point_of_interaction"]["transaction_data"]["qr_code"]
         texto_final = (
             f"✅ *PIX GERADO COM SUCESSO!*\n\n"
@@ -88,11 +93,13 @@ def callback_pix(call):
         )
         bot.send_message(call.message.chat.id, texto_final, parse_mode="Markdown")
     except Exception as e:
-        print(f"ERRO: {e}")
-        print(f"Resposta: {res.text}")
+        print(f">>> ERRO EXCEPTION: {e}")
+        print(f">>> Resposta raw: {res.text if res else 'sem resposta'}")
         bot.send_message(call.message.chat.id, "❌ Erro ao gerar PIX. Tente novamente.")
 
 print("✅ Bot iniciado!")
+print(f"Token Telegram: {TOKEN_TELEGRAM[:20] if TOKEN_TELEGRAM else 'NAO ENCONTRADO'}")
+print(f"Token MP: {ACCESS_TOKEN_MP[:20] if ACCESS_TOKEN_MP else 'NAO ENCONTRADO'}")
 thread = threading.Thread(target=rodar_servidor)
 thread.daemon = True
 thread.start()
